@@ -28,7 +28,6 @@ class LeecherUI:
         self.master = master
         master.title("P2P File Leecher")
         
-        # Override the destroy method
         self.master.protocol("WM_DELETE_WINDOW", self.on_close)
         
         self.frame = ttk.Frame(master, padding="10")
@@ -80,12 +79,12 @@ class LeecherUI:
         self.chunk_hashes = {}
 
     def on_close(self):
-        """Handle window close event"""
+        # Handle window close event
         self.notify_shutdown()
         self.master.destroy()
 
     def notify_shutdown(self):
-        """Notify tracker and seeders to shut down"""
+        # Notify tracker and seeders to shut down
         try:
             # Notify tracker
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as tracker_socket:
@@ -105,7 +104,7 @@ class LeecherUI:
             logging.error(f"Error during shutdown notification: {str(e)}")
 
     def check_file(self):
-        """Check for file availability from seeders"""
+        # Check for file availability from seeders
         filename = self.filename_entry.get().strip()
         if not filename:
             messagebox.showerror("Error", "Please enter a filename")
@@ -115,7 +114,7 @@ class LeecherUI:
         threading.Thread(target=self.do_check_file, args=(filename,)).start()
 
     def do_check_file(self, filename):
-        """Background thread to check file availability"""
+        # Background thread to check file availability
         try:
             file_size = self.get_file_size(filename)
             if file_size:
@@ -134,7 +133,7 @@ class LeecherUI:
             self.master.after(0, messagebox.showerror, "Error", str(e))
 
     def get_file_size(self, filename):
-        """Get file size from available seeders"""
+        # Get file size from available seeders
         seeders = self.request_seeders(filename, retry=True)
         if seeders:
             self.active_seeders = len(seeders)
@@ -146,7 +145,7 @@ class LeecherUI:
         return None
 
     def request_seeders(self, filename, retry=False):
-        """Request list of seeders from tracker"""
+        # Request list of seeders from tracker
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.sendto(f"REQUEST {filename}".encode(), (TRACKER_IP, TRACKER_PORT))
             try:
@@ -166,7 +165,7 @@ class LeecherUI:
         return []
 
     def try_default_seeder(self, filename):
-        """Try to get file size from default seeder"""
+        # Try to get file size from default seeder
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.settimeout(5)
@@ -184,7 +183,7 @@ class LeecherUI:
         return None
 
     def try_get_filesize(self, seeders, filename):
-        """Try to get file size from multiple seeders"""
+        # Try to get file size from multiple seeders
         for ip, port in seeders:
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -201,12 +200,12 @@ class LeecherUI:
         return None
 
     def update_file_info(self, filename, size):
-        """Update UI with file information"""
+        # Update UI with file information
         total_chunks = (size + CHUNK_SIZE - 1) // CHUNK_SIZE
         self.file_info.config(text=f"File: {filename} | Size: {size} bytes | Chunks: {total_chunks}")
 
     def start_download(self):
-        """Begin the download process"""
+        # Begin the download process
         filename = self.filename_entry.get().strip()
         self.chunk_hashes = {}  # Reset chunk hashes
         self.status.config(text="Status: Starting download...")
@@ -217,7 +216,7 @@ class LeecherUI:
         threading.Thread(target=self.do_download, args=(filename,)).start()
 
     def do_download(self, filename):
-        """Background thread to handle the actual download"""
+        # Background thread to handle the actual download
         try:
             seeders = self.request_seeders(filename)
             self.active_seeders = len(seeders)
@@ -234,7 +233,6 @@ class LeecherUI:
             total_chunks = (self.file_size + CHUNK_SIZE - 1) // CHUNK_SIZE
             file_parts = [None] * total_chunks
             
-            # Create a download directory if it doesn't exist
             download_dir = "downloads"
             if not os.path.exists(download_dir):
                 os.makedirs(download_dir)
@@ -242,10 +240,8 @@ class LeecherUI:
             downloaded_bytes = 0
             start_time = time.time()
             
-            # Download chunks in parallel
             threads = []
-            max_threads = min(10, len(seeders) * 2)  # Adjust based on available seeders
-            thread_semaphore = Semaphore(max_threads)
+            max_threads = min(10, len(seeders) * 2)
             
             for chunk in range(total_chunks):
                 thread_semaphore.acquire()
@@ -257,11 +253,9 @@ class LeecherUI:
                 thread.start()
                 threads.append(thread)
             
-            # Wait for all threads to complete
             for thread in threads:
                 thread.join()
             
-            # Check if all chunks were downloaded
             if None in file_parts:
                 raise Exception("Some chunks failed to download")
             
@@ -274,7 +268,6 @@ class LeecherUI:
             elapsed_time = time.time() - start_time
             download_speed = self.file_size / elapsed_time / 1024 if elapsed_time > 0 else 0
             
-            # Record this file for potential reseeding
             self.completed_downloads.append(filename)
             
             self.master.after(0, self.register_as_seeder, filename, output_path)
@@ -289,7 +282,7 @@ class LeecherUI:
             self.master.after(0, self.status.config, {"text": f"Status: Error - {str(e)}"})
 
     def download_chunk(self, seeders, chunk_idx, file_parts, filename, semaphore):
-        """Download a single chunk from available seeders"""
+        # Download a single chunk from available seeders
         try:
             for attempt in range(MAX_RETRIES):
                 idx = attempt % len(seeders)
@@ -301,7 +294,6 @@ class LeecherUI:
                         sock.connect((ip, int(port)))
                         sock.send(f"REQUEST {filename} {chunk_idx}".encode())
                         
-                        # First line should contain the hash
                         response = b""
                         hash_received = False
                         chunk_hash = None
@@ -312,7 +304,6 @@ class LeecherUI:
                                 break
                                 
                             if not hash_received:
-                                # Process the first line for hash
                                 response += chunk
                                 if b'\n' in response:
                                     header, rest = response.split(b'\n', 1)
@@ -324,7 +315,6 @@ class LeecherUI:
                                 response += chunk
                         
                         if response:
-                            # Verify integrity if hash was provided
                             if chunk_hash:
                                 calculated_hash = hashlib.sha256(response).hexdigest()
                                 if calculated_hash != chunk_hash:
@@ -335,7 +325,6 @@ class LeecherUI:
                             file_parts[chunk_idx] = response
                             self.downloaded_chunks += 1
                             
-                            # Update progress bar
                             progress_value = self.downloaded_chunks * 100 / self.total_chunks
                             self.master.after(0, self.progress.config, {"value": progress_value})
                             self.master.after(0, self.chunk_label.config, 
@@ -352,7 +341,7 @@ class LeecherUI:
         return False
 
     def register_as_seeder(self, filename, file_path):
-        """Register as a seeder for a completed download"""
+        # Register as a seeder for a completed download
         try:
             logging.info(f"Would register as seeder for {filename} (at {file_path})")
             messagebox.showinfo("Seeder", 
@@ -362,18 +351,15 @@ class LeecherUI:
             logging.error(f"Error registering as seeder: {str(e)}")
 
     def reseed_files(self):
-        """Show dialog for reseeding downloaded files and start seeder.py for selected files."""
+        # Show dialog for reseeding downloaded files and start seeder.py
         download_dir = "downloads"
         
-        # Check if the downloads folder exists and contains files
         if not os.path.exists(download_dir) or not os.listdir(download_dir):
             messagebox.showinfo("Reseed", "No completed downloads to reseed.")
             return
         
-        # List all files in the downloads folder
         files_str = "\n".join(os.listdir(download_dir))
         
-        # Prompt the user for confirmation
         confirm = messagebox.askyesno("Reseed Files", 
                                      f"You have the following files available for reseeding:\n\n{files_str}\n\n"
                                      "Do you want to start seeding these files?")
@@ -381,30 +367,25 @@ class LeecherUI:
         if not confirm:
             return
         
-        # Prompt the user to specify a port for seeding (optional)
         port = simpledialog.askinteger("Reseed Port", 
                                        "Enter the port number for seeding (default is 6002):\n"
                                        "Leave blank to use the default port.", 
                                        minvalue=1024, maxvalue=65535)
         
-        # If the user cancels the input, do not proceed
         if port is None:
             return
         
-        # Construct the command to run seeder.py
         seeder_script = "seeder.py"
         
-        # If a port is specified, include it in the command
         if port:
             command = f"python {seeder_script} -p {port}"
         else:
             command = f"python {seeder_script}"
         
-        # Run the command in a new terminal window
         try:
-            if os.name == "nt":  # Windows
+            if os.name == "nt":
                 subprocess.Popen(["start", "cmd", "/k", command], shell=True)
-            elif os.name == "posix":  # macOS/Linux
+            elif os.name == "posix":
                 subprocess.Popen(["gnome-terminal", "--", "bash", "-c", command])
             else:
                 messagebox.showerror("Error", "Unsupported operating system for terminal spawning.")
@@ -416,7 +397,7 @@ class LeecherUI:
             messagebox.showerror("Error", f"Failed to start seeder: {str(e)}")
 
     def refresh_seeders(self):
-        """Refresh the number of active seeders"""
+        # Refresh the number of active seeders
         if self.current_file:
             seeders = self.request_seeders(self.current_file)
             self.active_seeders = len(seeders)
