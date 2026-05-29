@@ -22,6 +22,7 @@ TRACKER_PORT = 5000
 MAX_RETRIES = 5
 CHUNK_SIZE = 512 * 1024  # 512 KB as specified in the assignment
 DEFAULT_SEEDER_PORT = 6002
+thread_semaphore = Semaphore(10) 
 
 class LeecherUI:
     def __init__(self, master):
